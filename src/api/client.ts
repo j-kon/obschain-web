@@ -1,85 +1,99 @@
-import {
-  ChainEvent,
-  EventsResponse,
-  Incident,
-  IncidentsResponse,
-  SystemStatus,
-} from '../types';
+/**
+ * ObsChain HTTP Client
+ * 
+ * Provides robust network communication with timeout handling,
+ * error normalization, and non-crashing failure modes.
+ */
 
-const API_BASE_URL =
+export const API_BASE_URL =
   import.meta.env.VITE_OBSCHAIN_API_URL || 'http://localhost:8080';
 
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    public code?: number
   ) {
     super(message);
     this.name = 'ApiError';
   }
 }
 
-async function fetchJson<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`;
+export interface FetchOptions extends RequestInit {
+  timeoutMs?: number;
+}
+
+/**
+ * Execute an HTTP request with timeout protection and structured error handling.
+ */
+export async function apiFetch<T>(
+  endpoint: string,
+  options?: FetchOptions
+): Promise<T> {
+  const timeoutMs = options?.timeoutMs ?? 10_000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const url = `${API_BASE_URL}${cleanEndpoint}`;
+
   try {
     const res = await fetch(url, {
       ...options,
+      signal: controller.signal,
       headers: {
+        Accept: 'application/json',
         'Content-Type': 'application/json',
         ...(options?.headers || {}),
       },
     });
 
+    clearTimeout(timer);
+
     if (!res.ok) {
-      let errMsg = `API error ${res.status}: ${res.statusText}`;
+      let errMsg = `HTTP ${res.status}: ${res.statusText}`;
+      let errCode: number | undefined;
+
       try {
         const errJson = await res.json();
         if (errJson?.error) {
           errMsg = errJson.error;
+          errCode = errJson.code;
         }
       } catch {
-        // use default error message
+        // Response body was not JSON, retain default status message
       }
-      throw new ApiError(res.status, errMsg);
+
+      throw new ApiError(res.status, errMsg, errCode);
     }
 
-    return (await res.json()) as T;
-  } catch (error) {
-    if (error instanceof ApiError) {
-      throw error;
+    const text = await res.text();
+    if (!text || text.trim().length === 0) {
+      return {} as T;
     }
-    throw new Error(
-      `Failed to connect to ObsChain backend at ${API_BASE_URL}. Ensure the backend service is running. Details: ${(error as Error).message}`
+
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      throw new ApiError(res.status, 'Invalid JSON returned by backend API');
+    }
+  } catch (err: unknown) {
+    clearTimeout(timer);
+
+    if (err instanceof ApiError) {
+      throw err;
+    }
+
+    if ((err as Error).name === 'AbortError') {
+      throw new ApiError(
+        408,
+        `Request to ObsChain API timed out after ${timeoutMs}ms (${endpoint})`
+      );
+    }
+
+    throw new ApiError(
+      0,
+      `ObsChain backend unreachable at ${API_BASE_URL}. Ensure the service is running. (${(err as Error).message})`
     );
   }
 }
-
-export const api = {
-  getBaseUrl(): string {
-    return API_BASE_URL;
-  },
-
-  async getHealth(): Promise<{ status: string; timestamp: string; version: string }> {
-    return fetchJson<{ status: string; timestamp: string; version: string }>('/health');
-  },
-
-  async getStatus(): Promise<SystemStatus> {
-    return fetchJson<SystemStatus>('/api/v1/status');
-  },
-
-  async getEvents(limit = 50, offset = 0): Promise<EventsResponse> {
-    return fetchJson<EventsResponse>(`/api/v1/events?limit=${limit}&offset=${offset}`);
-  },
-
-  async getEventById(id: string): Promise<ChainEvent> {
-    return fetchJson<ChainEvent>(`/api/v1/events/${id}`);
-  },
-
-  async getIncidents(limit = 50, offset = 0): Promise<IncidentsResponse> {
-    return fetchJson<IncidentsResponse>(`/api/v1/incidents?limit=${limit}&offset=${offset}`);
-  },
-
-  async getIncidentById(id: string): Promise<Incident> {
-    return fetchJson<Incident>(`/api/v1/incidents/${id}`);
-  },
-};

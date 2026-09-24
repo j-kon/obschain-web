@@ -1,58 +1,22 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { Header } from '../components/Header';
-import { api } from '../api/client';
-import { SystemStatus } from '../types';
+import { useEvents } from '../context/EventContext';
 import { Terminal, Shield, Activity } from 'lucide-react';
 
 export const AppShell: React.FC = () => {
-  const [status, setStatus] = useState<SystemStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let mounted = true;
-    api
-      .getStatus()
-      .then((data) => {
-        if (mounted) {
-          setStatus(data);
-          setLoading(false);
-        }
-      })
-      .catch((err) => {
-        console.warn('Backend status unreachable, using local fallback telemetry:', err);
-        if (mounted) {
-          setStatus({
-            status: 'offline_or_simulated',
-            version: '0.1.0',
-            network: 'bitcoin-mainnet',
-            engine: 'ObsChain Core (Mock Feed)',
-            timestamp: new Date().toISOString(),
-            uptime_seconds: 0,
-            active_detectors: [
-              'large_transaction_detector',
-              'long_block_interval_detector',
-            ],
-            storage_backend: 'in-memory (simulated)',
-            is_mock_feed: true,
-            mock_data_disclaimer:
-              'Simulated demonstration telemetry. Backend is offline or running standalone.',
-          });
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const { status, connectionState, loading } = useEvents();
 
   return (
     <div className="min-h-screen flex flex-col bg-surface-base text-slate-100 antialiased selection:bg-amber-500 selection:text-black">
-      <Header status={status} loading={loading} />
+      <Header
+        status={status}
+        connectionState={connectionState}
+        loading={loading}
+      />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Outlet context={{ status }} />
+        <Outlet context={{ status, connectionState }} />
       </main>
 
       <footer className="bg-surface-panel/90 border-t border-surface-border py-8 text-xs text-slate-400 font-mono">

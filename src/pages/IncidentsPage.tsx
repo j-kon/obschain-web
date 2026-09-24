@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, RefreshCw, ShieldAlert } from 'lucide-react';
-import { api } from '../api/client';
+import { fetchIncidents } from '../api';
 import { Incident } from '../types';
 import { IncidentCard } from '../components/IncidentCard';
 import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
+import { EmptyState } from '../components/EmptyState';
 
 export const IncidentsPage: React.FC = () => {
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -14,8 +15,7 @@ export const IncidentsPage: React.FC = () => {
   const loadIncidents = () => {
     setLoading(true);
     setError(null);
-    api
-      .getIncidents(50, 0)
+    fetchIncidents(50, 0)
       .then((res) => {
         setIncidents(res.incidents || []);
         setLoading(false);
@@ -35,11 +35,11 @@ export const IncidentsPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-surface-border">
         <div>
           <h1 className="text-2xl font-bold font-mono text-white flex items-center gap-2">
-            <AlertTriangle className="w-6 h-6 text-red-500" />
+            <AlertTriangle className="w-6 h-6 text-amber-500" />
             <span>Bitcoin Incident Cases &amp; Intelligence</span>
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Forensic investigation dossiers tracking major anomalies, thefts, protocol events, and fund movements.
+            Forensic investigation dossiers tracking major anomalies, chain disruptions, and fund movements.
           </p>
         </div>
 
@@ -54,7 +54,7 @@ export const IncidentsPage: React.FC = () => {
       </div>
 
       {/* Provenance Banner */}
-      <div className="bg-amber-950/30 border border-amber-800/40 rounded-lg p-4 flex items-start gap-3">
+      <div className="bg-amber-950/20 border border-amber-800/40 rounded-lg p-4 flex items-start gap-3">
         <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
         <div className="text-xs font-mono text-amber-200/90 space-y-1">
           <p className="font-semibold text-amber-300 uppercase tracking-wide">
@@ -69,9 +69,14 @@ export const IncidentsPage: React.FC = () => {
       </div>
 
       {loading ? (
-        <LoadingState message="Loading incident records..." rows={4} />
+        <LoadingState message="Loading incident records from ObsChain..." rows={4} />
       ) : error ? (
         <ErrorState error={error} onRetry={loadIncidents} />
+      ) : incidents.length === 0 ? (
+        <EmptyState
+          title="No active ObsChain incidents."
+          description="ObsChain has not recorded open security incidents or chain disruptions for this monitoring period. Major historical case dossiers (including the Liquid network unpegged transaction case) will be published in upcoming releases."
+        />
       ) : (
         <div className="space-y-4">
           {incidents.map((incident) => (

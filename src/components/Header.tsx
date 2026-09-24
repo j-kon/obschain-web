@@ -3,14 +3,19 @@ import { Link } from 'react-router-dom';
 import { Eye, Github } from 'lucide-react';
 import { Navigation } from './Navigation';
 import { NetworkStatus } from './NetworkStatus';
-import { SystemStatus } from '../types';
+import { SystemStatus, ConnectionState } from '../types';
 
 interface HeaderProps {
   status?: SystemStatus | null;
+  connectionState?: ConnectionState;
   loading?: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({ status, loading }) => {
+export const Header: React.FC<HeaderProps> = ({
+  status,
+  connectionState = 'disconnected',
+  loading,
+}) => {
   return (
     <header className="sticky top-0 z-50 bg-surface-base/90 backdrop-blur-md border-b border-surface-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -40,7 +45,11 @@ export const Header: React.FC<HeaderProps> = ({ status, loading }) => {
 
           {/* Network status and External links */}
           <div className="flex items-center gap-4">
-            <NetworkStatus status={status} loading={loading} />
+            <NetworkStatus
+              status={status}
+              connectionState={connectionState}
+              loading={loading}
+            />
 
             <a
               href="https://github.com/j-kon/obschain"

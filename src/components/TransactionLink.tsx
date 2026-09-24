@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Copy, Check, ExternalLink } from 'lucide-react';
+import { getTransactionExplorerUrl } from '../utils/explorer';
 
 interface TransactionLinkProps {
   txid: string;
@@ -40,12 +41,12 @@ export const TransactionLink: React.FC<TransactionLinkProps> = ({
         )}
       </button>
       <a
-        href={`https://mempool.space/tx/${txid}`}
+        href={getTransactionExplorerUrl(txid)}
         target="_blank"
         rel="noopener noreferrer"
         onClick={(e) => e.stopPropagation()}
         className="text-slate-400 hover:text-amber-400 transition-colors"
-        title="View on mempool.space"
+        title="View on block explorer"
       >
         <ExternalLink className="w-3 h-3" />
       </a>

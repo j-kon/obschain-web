@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, ExternalLink } from 'lucide-react';
+import { getBlockExplorerUrl } from '../utils/explorer';
 
 interface BlockLinkProps {
   height?: number | null;
@@ -11,8 +12,8 @@ export const BlockLink: React.FC<BlockLinkProps> = ({ height, hash }) => {
 
   const label = height ? `#${height.toLocaleString()}` : `${hash?.slice(0, 8)}...`;
   const url = height
-    ? `https://mempool.space/block/${height}`
-    : `https://mempool.space/block/${hash}`;
+    ? getBlockExplorerUrl(height)
+    : getBlockExplorerUrl(hash!);
 
   return (
     <a

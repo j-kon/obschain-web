@@ -12,7 +12,7 @@ import {
   Layers,
   Database,
 } from 'lucide-react';
-import { api } from '../api/client';
+import { api } from '../api';
 import { Incident } from '../types';
 import { SeverityBadge } from '../components/SeverityBadge';
 import { EvidenceBadge } from '../components/EvidenceBadge';

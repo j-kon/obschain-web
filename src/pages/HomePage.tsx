@@ -1,45 +1,51 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Activity,
   Radio,
-  AlertTriangle,
-  Layers,
-  Zap,
   ArrowRight,
-  TrendingUp,
-  Cpu,
   Shield,
-  Box,
+  AlertTriangle,
+  RefreshCw,
+  SlidersHorizontal,
 } from 'lucide-react';
-import { api } from '../api/client';
-import { ChainEvent, Incident } from '../types';
-import { EventCard } from '../components/EventCard';
+import { useEvents } from '../context/EventContext';
+import { fetchIncidents } from '../api';
+import { Incident } from '../types';
+import { NetworkStatusCard } from '../components/NetworkStatusCard';
+import { EventFeed } from '../components/EventFeed';
 import { IncidentCard } from '../components/IncidentCard';
 import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
+import { LiveIndicator } from '../components/LiveIndicator';
 
 export const HomePage: React.FC = () => {
-  const [events, setEvents] = useState<ChainEvent[]>([]);
+  const {
+    events,
+    status,
+    connectionState,
+    loading,
+    error,
+    newEventCount,
+    clearNewEventCount,
+    refresh,
+  } = useEvents();
+
   const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [incidentsLoading, setIncidentsLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
-
-    Promise.all([api.getEvents(5, 0), api.getIncidents(3, 0)])
-      .then(([eventsRes, incidentsRes]) => {
+    fetchIncidents(3, 0)
+      .then((res) => {
         if (mounted) {
-          setEvents(eventsRes.events || []);
-          setIncidents(incidentsRes.incidents || []);
-          setLoading(false);
+          setIncidents(res.incidents || []);
+          setIncidentsLoading(false);
         }
       })
-      .catch((err) => {
+      .catch(() => {
         if (mounted) {
-          setError((err as Error).message);
-          setLoading(false);
+          setIncidents([]);
+          setIncidentsLoading(false);
         }
       });
 
@@ -49,32 +55,32 @@ export const HomePage: React.FC = () => {
   }, []);
 
   return (
-    <div className="space-y-12">
+    <div className="space-y-10">
       {/* Hero Section */}
-      <section className="relative overflow-hidden rounded-xl border border-surface-border bg-gradient-to-b from-surface-panel to-surface-base p-8 sm:p-12">
+      <section className="relative overflow-hidden rounded-2xl border border-surface-border bg-gradient-to-b from-surface-panel/90 via-surface-panel/60 to-surface-base p-6 sm:p-10">
         <div className="max-w-3xl space-y-4">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono text-xs">
-            <Radio className="w-3.5 h-3.5 animate-pulse" />
+            <Radio className="w-3.5 h-3.5 animate-pulse text-amber-400" />
             <span>Autonomous Bitcoin Network Observation</span>
           </div>
 
-          <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-white font-mono">
+          <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white font-mono leading-tight">
             Observe Bitcoin. <br />
             <span className="text-amber-500">Understand the event.</span>
           </h1>
 
-          <p className="text-base sm:text-lg text-slate-300 max-w-2xl leading-relaxed">
-            ObsChain observes raw Bitcoin blocks, mempool dynamics, and structural anomalies.
-            It provides sovereign incident analysis, forensic timelines, and evidence provenance
-            without trusting third-party claims.
+          <p className="text-sm sm:text-base text-slate-300 max-w-2xl leading-relaxed font-sans">
+            ObsChain connects directly to Bitcoin mempool dynamics and block streams.
+            It provides sovereign incident analysis, dormant coin detection, UTXO forensics,
+            and cryptographic provenance without relying on third-party claims.
           </p>
 
-          <div className="flex flex-wrap items-center gap-3 pt-4">
+          <div className="flex flex-wrap items-center gap-3 pt-3">
             <Link
               to="/events"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-semibold text-sm font-mono transition-colors"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-semibold text-sm font-mono transition-colors shadow-sm"
             >
-              <span>Explore Events Feed</span>
+              <span>Explore All Events</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
 
@@ -83,114 +89,89 @@ export const HomePage: React.FC = () => {
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-surface-card hover:bg-surface-border border border-surface-border text-slate-200 font-semibold text-sm font-mono transition-colors"
             >
               <AlertTriangle className="w-4 h-4 text-amber-400" />
-              <span>Active Incidents</span>
+              <span>Incidents Dossier</span>
             </Link>
+
+            <button
+              onClick={() => refresh()}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-lg bg-surface-panel hover:bg-surface-card border border-surface-border text-slate-300 text-xs font-mono transition-colors"
+              title="Refresh telemetry and event feed"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
           </div>
         </div>
 
-        {/* Technical disclaimer badge */}
+        {/* Provenance Guarantee Badge */}
         <div className="mt-8 pt-4 border-t border-surface-border/60 flex items-center gap-2 text-xs font-mono text-slate-400">
-          <Shield className="w-4 h-4 text-emerald-400" />
+          <Shield className="w-4 h-4 text-emerald-400 flex-shrink-0" />
           <span>
             Strict Provenance Guarantee: Heuristics are never conflated with on-chain cryptographic facts.
           </span>
         </div>
       </section>
 
-      {/* Network Telemetry & Mempool Activity Section */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold font-mono text-slate-100 flex items-center gap-2">
-            <Activity className="w-5 h-5 text-amber-500" />
-            <span>Network Status &amp; Mempool Activity</span>
-          </h2>
-          <span className="text-xs font-mono text-slate-400">
-            Snapshot Height #884,920
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-surface-panel border border-surface-border rounded-lg p-5 space-y-2">
-            <div className="flex items-center justify-between text-slate-400 text-xs font-mono">
-              <span>Mempool Congestion</span>
-              <Zap className="w-4 h-4 text-amber-400" />
-            </div>
-            <div className="text-2xl font-bold font-mono text-white">
-              142.5 <span className="text-sm font-normal text-slate-400">vMB</span>
-            </div>
-            <p className="text-xs text-slate-400 font-mono">~95 blocks to clear backlog</p>
-          </div>
-
-          <div className="bg-surface-panel border border-surface-border rounded-lg p-5 space-y-2">
-            <div className="flex items-center justify-between text-slate-400 text-xs font-mono">
-              <span>Median Fee Rate</span>
-              <TrendingUp className="w-4 h-4 text-emerald-400" />
-            </div>
-            <div className="text-2xl font-bold font-mono text-white">
-              24.8 <span className="text-sm font-normal text-slate-400">sat/vB</span>
-            </div>
-            <p className="text-xs text-slate-400 font-mono">Priority target: 36 sat/vB</p>
-          </div>
-
-          <div className="bg-surface-panel border border-surface-border rounded-lg p-5 space-y-2">
-            <div className="flex items-center justify-between text-slate-400 text-xs font-mono">
-              <span>Last Block Interval</span>
-              <Box className="w-4 h-4 text-sky-400" />
-            </div>
-            <div className="text-2xl font-bold font-mono text-white">
-              9.2 <span className="text-sm font-normal text-slate-400">min</span>
-            </div>
-            <p className="text-xs text-slate-400 font-mono">Target: 10.0 min (Normal)</p>
-          </div>
-
-          <div className="bg-surface-panel border border-surface-border rounded-lg p-5 space-y-2">
-            <div className="flex items-center justify-between text-slate-400 text-xs font-mono">
-              <span>Active Detectors</span>
-              <Cpu className="w-4 h-4 text-purple-400" />
-            </div>
-            <div className="text-2xl font-bold font-mono text-white">
-              2 <span className="text-sm font-normal text-slate-400">Online</span>
-            </div>
-            <p className="text-xs text-slate-400 font-mono">Large Tx + Long Interval</p>
-          </div>
-        </div>
+      {/* Network Status Card (Block Height, Connection, Events Observed, Detectors, Ingestion) */}
+      <section>
+        <NetworkStatusCard
+          status={status}
+          connectionState={connectionState}
+          loading={loading}
+        />
       </section>
 
-      {/* Main Grid: Latest Observed Events & Active Incidents */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Latest Events Column (2 cols) */}
+      {/* Main Grid: Live Observation Feed + Active Incidents Panel */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+        {/* Live Observation Feed Column (2 cols) */}
         <section className="lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold font-mono text-slate-100 flex items-center gap-2">
-              <Radio className="w-5 h-5 text-amber-500" />
-              <span>Latest Observed Events</span>
-            </h2>
-            <Link
-              to="/events"
-              className="text-xs font-mono text-amber-400 hover:underline flex items-center gap-1"
-            >
-              View all &rarr;
-            </Link>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-surface-border">
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-xl font-bold font-mono text-white flex items-center gap-2">
+                  <Radio className="w-5 h-5 text-amber-500" />
+                  <span>Live Observation Feed</span>
+                </h2>
+                <LiveIndicator state={connectionState} showText={false} />
+              </div>
+              <p className="text-xs text-slate-400 mt-1 font-mono">
+                Real-time Bitcoin anomalies streamed directly from ObsChain detectors.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Link
+                to="/events"
+                className="text-xs font-mono text-amber-400 hover:text-amber-300 flex items-center gap-1"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span>Advanced View &rarr;</span>
+              </Link>
+            </div>
           </div>
 
-          {loading ? (
-            <LoadingState message="Loading latest chain observations..." />
-          ) : error ? (
-            <ErrorState error={error} />
+          {loading && events.length === 0 ? (
+            <LoadingState message="Connecting to ObsChain and synchronizing observation feed..." />
+          ) : error && events.length === 0 ? (
+            <ErrorState
+              error={error}
+              onRetry={refresh}
+            />
           ) : (
-            <div className="space-y-3">
-              {events.map((ev) => (
-                <EventCard key={ev.id} event={ev} />
-              ))}
-            </div>
+            <EventFeed
+              events={events}
+              limit={25}
+              newEventCount={newEventCount}
+              onClearNewEvents={clearNewEventCount}
+            />
           )}
         </section>
 
         {/* Active Incidents Column (1 col) */}
         <section className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between pb-2 border-b border-surface-border">
             <h2 className="text-xl font-bold font-mono text-slate-100 flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-red-400" />
+              <AlertTriangle className="w-5 h-5 text-amber-400" />
               <span>Active Incidents</span>
             </h2>
             <Link
@@ -201,10 +182,21 @@ export const HomePage: React.FC = () => {
             </Link>
           </div>
 
-          {loading ? (
-            <LoadingState message="Loading incident dossiers..." rows={2} />
-          ) : error ? (
-            <ErrorState error={error} />
+          {incidentsLoading ? (
+            <LoadingState message="Checking incident records..." rows={2} />
+          ) : incidents.length === 0 ? (
+            <div className="p-6 rounded-xl border border-surface-border bg-surface-panel/60 space-y-3 font-mono text-xs text-slate-400">
+              <div className="flex items-center gap-2 text-slate-300 font-semibold text-sm">
+                <Shield className="w-4 h-4 text-emerald-400" />
+                <span>No active ObsChain incidents.</span>
+              </div>
+              <p className="leading-relaxed">
+                ObsChain has not recorded unmitigated security incidents or chain disruptions for this observation period.
+              </p>
+              <div className="pt-2 border-t border-surface-border/40 text-[11px] text-slate-400">
+                Major past anomalies (including the Liquid network unpegged transaction case) can be inspected in the Incidents archive.
+              </div>
+            </div>
           ) : (
             <div className="space-y-4">
               {incidents.map((inc) => (
@@ -214,60 +206,6 @@ export const HomePage: React.FC = () => {
           )}
         </section>
       </div>
-
-      {/* Recent Blocks Section */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold font-mono text-slate-100 flex items-center gap-2">
-            <Layers className="w-5 h-5 text-sky-400" />
-            <span>Recent Bitcoin Blocks (Sample Feed)</span>
-          </h2>
-          <span className="text-xs font-mono text-slate-400">
-            Source: mempool / node RPC
-          </span>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm font-mono border border-surface-border rounded-lg bg-surface-panel/40">
-            <thead className="bg-surface-panel border-b border-surface-border text-xs text-slate-400 uppercase">
-              <tr>
-                <th className="py-3 px-4">Height</th>
-                <th className="py-3 px-4">Hash</th>
-                <th className="py-3 px-4">Tx Count</th>
-                <th className="py-3 px-4">Size</th>
-                <th className="py-3 px-4">Miner Tag</th>
-                <th className="py-3 px-4">Interval</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-border/50 text-slate-300">
-              <tr className="hover:bg-surface-card/60 transition-colors">
-                <td className="py-3 px-4 font-bold text-amber-400">#884,920</td>
-                <td className="py-3 px-4 text-xs text-slate-400">000000000000000000021b34e569...</td>
-                <td className="py-3 px-4">2,912</td>
-                <td className="py-3 px-4">1.64 MB</td>
-                <td className="py-3 px-4 text-sky-400">Foundry USA</td>
-                <td className="py-3 px-4 text-emerald-400">9.2 min</td>
-              </tr>
-              <tr className="hover:bg-surface-card/60 transition-colors">
-                <td className="py-3 px-4 font-bold text-amber-400">#884,919</td>
-                <td className="py-3 px-4 text-xs text-slate-400">000000000000000000030991c490...</td>
-                <td className="py-3 px-4">3,140</td>
-                <td className="py-3 px-4">1.71 MB</td>
-                <td className="py-3 px-4 text-sky-400">AntPool</td>
-                <td className="py-3 px-4 text-emerald-400">11.4 min</td>
-              </tr>
-              <tr className="hover:bg-surface-card/60 transition-colors">
-                <td className="py-3 px-4 font-bold text-amber-400">#884,918</td>
-                <td className="py-3 px-4 text-xs text-slate-400">00000000000000000001f37e42d8...</td>
-                <td className="py-3 px-4">4,520</td>
-                <td className="py-3 px-4">1.94 MB</td>
-                <td className="py-3 px-4 text-sky-400">AntPool</td>
-                <td className="py-3 px-4 text-amber-400 font-semibold">74.0 min (ANOMALY)</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
     </div>
   );
 };
