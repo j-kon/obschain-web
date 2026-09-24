@@ -29,6 +29,13 @@ export const EvidenceBadge: React.FC<EvidenceBadgeProps> = ({
       border: 'border-cyan-700/60',
       icon: <Award className="w-3.5 h-3.5" />,
     },
+    REPUTABLE_REPORTING: {
+      label: 'Reputable Reporting',
+      bg: 'bg-purple-950/70',
+      text: 'text-purple-300',
+      border: 'border-purple-700/60',
+      icon: <ShieldAlert className="w-3.5 h-3.5" />,
+    },
     HIGH_CONFIDENCE_REPORTING: {
       label: 'Corroborated Report',
       bg: 'bg-purple-950/70',

@@ -1,342 +1,378 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft,
   Calendar,
-  CheckCircle2,
-  FileQuestion,
-  Info,
+  Copy,
+  Check,
+  ShieldAlert,
+  AlertTriangle,
+  RefreshCw,
+  FileText,
+  Activity,
   Network,
-  ExternalLink,
-  ShieldCheck,
+  Coins,
+  Cpu,
+  BookOpen,
+  History,
+  Code,
   Layers,
-  Database,
 } from 'lucide-react';
-import { api } from '../api';
-import { Incident } from '../types';
+import {
+  fetchIncident,
+  fetchIncidentTimeline,
+  fetchIncidentEvidence,
+  fetchIncidentGraph,
+} from '../api';
+import {
+  Incident,
+  TimelineEntry,
+  Evidence,
+  IncidentGraph,
+} from '../types';
 import { SeverityBadge } from '../components/SeverityBadge';
-import { EvidenceBadge } from '../components/EvidenceBadge';
-import { Timeline } from '../components/Timeline';
-import { TransactionLink } from '../components/TransactionLink';
-import { BlockLink } from '../components/BlockLink';
 import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
+import {
+  IncidentStatusBadge,
+  FundRecoveryPanel,
+  WhatChainProvesSummary,
+  EvidenceCertaintyPanel,
+  IncidentTimeline,
+  IncidentGraphView,
+  IncidentTransactionTable,
+  OnChainMessages,
+  TechnicalFindingPanel,
+  SourceList,
+  IncidentUpdateHistory,
+  RawDossierView,
+} from '../components/incidents';
+import { formatUtcTimestamp } from '../utils/formatters';
 
 export const IncidentDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [incident, setIncident] = useState<Incident | null>(null);
+  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
+  const [evidence, setEvidence] = useState<Evidence[]>([]);
+  const [graph, setGraph] = useState<IncidentGraph | null>(null);
+  const [graphError, setGraphError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [copiedCaseId, setCopiedCaseId] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>('overview');
 
-  useEffect(() => {
+  const loadDossier = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     setError(null);
+    setGraphError(null);
 
-    api
-      .getIncidentById(id)
-      .then((data) => {
-        setIncident(data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError((err as Error).message);
-        setLoading(false);
-      });
+    try {
+      // 1. Fetch primary incident dossier
+      const inc = await fetchIncident(id);
+      setIncident(inc);
+
+      // Start with embedded collections if present
+      let tl = inc.timeline || [];
+      let ev = inc.evidence || [];
+      let gr = inc.graph || null;
+
+      // 2. Concurrently fetch sub-resources for resilient enrichment
+      const [tlRes, evRes, grRes] = await Promise.allSettled([
+        fetchIncidentTimeline(id),
+        fetchIncidentEvidence(id),
+        fetchIncidentGraph(id),
+      ]);
+
+      if (tlRes.status === 'fulfilled' && tlRes.value.timeline?.length > 0) {
+        tl = tlRes.value.timeline;
+      }
+      if (evRes.status === 'fulfilled' && evRes.value.evidence?.length > 0) {
+        ev = evRes.value.evidence;
+      }
+      if (grRes.status === 'fulfilled' && grRes.value.nodes?.length > 0) {
+        gr = grRes.value;
+      } else if (grRes.status === 'rejected' && (!gr || gr.nodes?.length === 0)) {
+        setGraphError((grRes.reason as Error)?.message || 'Transaction flow graph could not be loaded.');
+      }
+
+      setTimeline(tl);
+      setEvidence(ev);
+      setGraph(gr);
+      setLoading(false);
+    } catch (err) {
+      setError((err as Error).message || 'Failed to load incident dossier');
+      setLoading(false);
+    }
   }, [id]);
 
-  if (loading) return <LoadingState message="Loading incident case file..." />;
-  if (error || !incident) {
+  useEffect(() => {
+    loadDossier();
+  }, [loadDossier]);
+
+  // Update browser document title
+  useEffect(() => {
+    if (incident?.title) {
+      document.title = `${incident.title} | ObsChain`;
+    } else {
+      document.title = 'Incident Dossier | ObsChain';
+    }
+    return () => {
+      document.title = 'ObsChain - Bitcoin Intelligence & Observation';
+    };
+  }, [incident]);
+
+  const handleCopyCaseId = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedCaseId(true);
+    setTimeout(() => setCopiedCaseId(false), 2000);
+  };
+
+  const navSections = useMemo(() => [
+    { id: 'overview', label: 'Overview', icon: <FileText className="w-3.5 h-3.5" /> },
+    { id: 'funds', label: 'Recovery', icon: <Coins className="w-3.5 h-3.5" /> },
+    { id: 'chain-proofs', label: 'Chain Proofs', icon: <ShieldAlert className="w-3.5 h-3.5" /> },
+    { id: 'timeline', label: 'Timeline', icon: <Calendar className="w-3.5 h-3.5" /> },
+    { id: 'graph', label: 'Flow Graph', icon: <Network className="w-3.5 h-3.5" /> },
+    { id: 'transactions', label: 'Transactions', icon: <Layers className="w-3.5 h-3.5" /> },
+    { id: 'messages', label: 'Messages', icon: <Activity className="w-3.5 h-3.5" /> },
+    { id: 'evidence', label: 'Evidence', icon: <FileText className="w-3.5 h-3.5" /> },
+    { id: 'technical', label: 'Root Cause', icon: <Cpu className="w-3.5 h-3.5" /> },
+    { id: 'sources', label: 'Sources', icon: <BookOpen className="w-3.5 h-3.5" /> },
+    { id: 'updates', label: 'Updates', icon: <History className="w-3.5 h-3.5" /> },
+    { id: 'raw', label: 'Raw JSON', icon: <Code className="w-3.5 h-3.5" /> },
+  ], []);
+
+  if (loading) {
     return (
-      <div className="space-y-4">
-        <Link
-          to="/incidents"
-          className="inline-flex items-center gap-1.5 text-xs font-mono text-amber-400 hover:underline"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Back to Incidents</span>
-        </Link>
-        <ErrorState error={error || 'Incident case file not found'} />
+      <div className="space-y-6">
+        <div className="flex items-center gap-2">
+          <Link
+            to="/incidents"
+            className="inline-flex items-center gap-1.5 text-xs font-mono text-amber-400 hover:underline"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back to Incident Intelligence</span>
+          </Link>
+        </div>
+        <LoadingState message="Loading ObsChain incident dossier..." rows={6} />
       </div>
     );
   }
 
+  if (error || !incident) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-2">
+          <Link
+            to="/incidents"
+            className="inline-flex items-center gap-1.5 text-xs font-mono text-amber-400 hover:underline"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back to Incident Intelligence</span>
+          </Link>
+        </div>
+        <ErrorState
+          error={error || 'Incident case dossier not found'}
+          onRetry={loadDossier}
+        />
+      </div>
+    );
+  }
+
+  const caseId = incident.case_id || incident.id;
+
   return (
-    <div className="space-y-8">
-      {/* Top back navigation */}
-      <div>
+    <div className="space-y-8 pb-16">
+      {/* Top Breadcrumb Navigation */}
+      <div className="flex items-center justify-between gap-4">
         <Link
           to="/incidents"
-          className="inline-flex items-center gap-1.5 text-xs font-mono text-amber-400 hover:underline"
+          className="inline-flex items-center gap-1.5 text-xs font-mono text-amber-400 hover:text-amber-300 hover:underline transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Back to Incident Intelligence</span>
+          <span>Back to Incident Intelligence Desk</span>
         </Link>
+
+        <button
+          onClick={loadDossier}
+          className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-surface-card hover:bg-surface-border border border-surface-border text-slate-300 text-xs font-mono transition-colors"
+          title="Reload Dossier"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Refresh Case</span>
+        </button>
       </div>
 
-      {/* Case Header Card */}
-      <div className="bg-surface-panel border border-surface-border rounded-xl p-6 sm:p-8 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-surface-border">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <SeverityBadge severity={incident.severity} />
-              <span className="font-mono text-xs px-2.5 py-1 rounded bg-slate-900 border border-slate-700 text-slate-200 uppercase tracking-wider font-semibold">
-                Status: {incident.status}
-              </span>
+      {/* Case Header Dossier Box */}
+      <div className="bg-surface-panel border border-surface-border rounded-xl p-6 sm:p-8 space-y-6 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 pb-6 border-b border-surface-border">
+          <div className="space-y-3 max-w-3xl">
+            <div className="flex items-center gap-2 text-xs font-mono text-slate-400 uppercase tracking-wider">
+              <span>ObsChain Incident Dossier</span>
+              <span>&bull;</span>
+              <button
+                onClick={() => handleCopyCaseId(caseId)}
+                className="inline-flex items-center gap-1 font-bold text-amber-400 hover:text-amber-300 bg-amber-950/40 border border-amber-800/60 px-2 py-0.5 rounded transition-colors"
+                title="Click to copy Case ID"
+              >
+                <span>{caseId}</span>
+                {copiedCaseId ? (
+                  <Check className="w-3 h-3 text-emerald-400" />
+                ) : (
+                  <Copy className="w-3 h-3 text-amber-400/80" />
+                )}
+              </button>
+              {copiedCaseId && (
+                <span className="text-[11px] text-emerald-400 font-sans">Copied</span>
+              )}
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold font-mono text-white">
+
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold font-mono text-white tracking-tight">
               {incident.title}
             </h1>
+
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <SeverityBadge severity={incident.severity} />
+              <IncidentStatusBadge status={incident.status} size="lg" />
+            </div>
           </div>
 
-          <div className="text-right text-xs font-mono text-slate-400 space-y-1">
-            <div className="flex items-center gap-1.5 justify-end">
-              <Calendar className="w-3.5 h-3.5" />
-              <span>Observed: {new Date(incident.first_observed_at).toLocaleDateString()}</span>
+          <div className="grid grid-cols-2 md:grid-cols-1 gap-4 text-xs font-mono text-slate-400 bg-surface-card/60 p-4 rounded-lg border border-surface-border shrink-0 min-w-[220px]">
+            <div>
+              <span className="text-slate-400 block text-[11px] uppercase tracking-wider">First observed</span>
+              <span className="text-slate-200 font-semibold text-sm mt-0.5 block">
+                {incident.first_observed_at ? formatUtcTimestamp(incident.first_observed_at).split(',')[0] : 'N/A'}
+              </span>
             </div>
-            <div>Case ID: {incident.id}</div>
+
+            <div>
+              <span className="text-slate-400 block text-[11px] uppercase tracking-wider">Last updated</span>
+              <span className="text-slate-200 font-semibold text-sm mt-0.5 block">
+                {incident.last_updated_at ? formatUtcTimestamp(incident.last_updated_at).split(',')[0] : 'N/A'}
+              </span>
+            </div>
           </div>
         </div>
 
         {/* Narrative Summary */}
-        <div className="space-y-2">
-          <h3 className="text-xs font-semibold font-mono text-slate-400 uppercase tracking-wider">
-            Case Summary
-          </h3>
-          <p className="text-slate-200 text-base leading-relaxed bg-surface-card/60 p-4 rounded-lg border border-surface-border">
+        <div id="overview" className="space-y-2 pt-1">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-semibold font-mono text-slate-400 uppercase tracking-wider">
+              Executive Summary &amp; Context
+            </h3>
+            <span className="text-[11px] font-mono text-slate-400 flex items-center gap-1">
+              <ShieldAlert className="w-3 h-3 text-amber-400" />
+              <span>Strict Provenance Standard</span>
+            </span>
+          </div>
+          <p className="text-slate-200 text-sm sm:text-base leading-relaxed bg-surface-card/40 p-4 sm:p-5 rounded-lg border border-surface-border font-sans">
             {incident.summary}
           </p>
         </div>
+      </div>
 
-        {/* Financial Flow Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
-          <div className="p-4 rounded-lg bg-surface-card/40 border border-surface-border">
-            <span className="text-xs font-mono text-slate-400">Total BTC Affected:</span>
-            <div className="text-2xl font-bold font-mono text-amber-400 mt-1">
-              {incident.total_btc_affected.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-              })}{' '}
-              BTC
+      {/* Sticky Dossier Navigation Bar */}
+      <div className="sticky top-2 z-20 bg-surface-panel/95 backdrop-blur border border-surface-border rounded-xl p-2 shadow-lg overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-1 min-w-max">
+          {navSections.map((sec) => (
+            <a
+              key={sec.id}
+              href={`#${sec.id}`}
+              onClick={() => setActiveSection(sec.id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono transition-colors ${
+                activeSection === sec.id
+                  ? 'bg-amber-500/10 text-amber-300 border border-amber-500/30 font-semibold'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-surface-card'
+              }`}
+            >
+              {sec.icon}
+              <span>{sec.label}</span>
+            </a>
+          ))}
+        </div>
+      </div>
+
+      {/* Section 1: Fund Recovery Panel */}
+      <section id="funds" className="scroll-mt-20">
+        {incident.recovery && (
+          <FundRecoveryPanel recovery={incident.recovery} />
+        )}
+      </section>
+
+      {/* Section 2: What the Chain Proves vs What Remains Unproven */}
+      <section id="chain-proofs" className="scroll-mt-20">
+        {incident.structured_claims && (
+          <WhatChainProvesSummary claims={incident.structured_claims} />
+        )}
+      </section>
+
+      {/* Section 3: Incident Timeline */}
+      <section id="timeline" className="scroll-mt-20">
+        <IncidentTimeline timeline={timeline} />
+      </section>
+
+      {/* Section 4: Transaction Flow Visualization (Graph) */}
+      <section id="graph" className="scroll-mt-20">
+        {graphError ? (
+          <div className="bg-surface-card border border-rose-900/40 rounded-xl p-6 space-y-3">
+            <div className="flex items-center gap-2 text-rose-400 font-mono text-sm font-bold">
+              <AlertTriangle className="w-5 h-5 text-rose-400" />
+              <span>Transaction Flow Graph Unavailable</span>
             </div>
+            <p className="text-xs text-slate-300">
+              {graphError}
+            </p>
+            <p className="text-xs text-slate-400">
+              The rest of this incident dossier remains fully accessible and verified.
+            </p>
           </div>
-
-          <div className="p-4 rounded-lg bg-surface-card/40 border border-surface-border">
-            <span className="text-xs font-mono text-slate-400">Total BTC Recovered:</span>
-            <div className="text-2xl font-bold font-mono text-emerald-400 mt-1">
-              {incident.total_btc_recovered.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-              })}{' '}
-              BTC
-            </div>
+        ) : graph && graph.nodes && graph.nodes.length > 0 ? (
+          <IncidentGraphView graph={graph} />
+        ) : (
+          <div className="bg-surface-card border border-surface-border rounded-xl p-6 text-center text-xs font-mono text-slate-400">
+            No topological flow graph mapped for this incident.
           </div>
+        )}
+      </section>
 
-          <div className="p-4 rounded-lg bg-surface-card/40 border border-surface-border">
-            <span className="text-xs font-mono text-slate-400">Verified On-Chain Facts:</span>
-            <div className="text-2xl font-bold font-mono text-slate-200 mt-1 flex items-center gap-2">
-              <CheckCircle2 className="w-6 h-6 text-emerald-400" />
-              <span>{incident.facts?.length || 0}</span>
-            </div>
-          </div>
+      {/* Section 5: Incident Transaction Table */}
+      <section id="transactions" className="scroll-mt-20">
+        <IncidentTransactionTable transactions={incident.transactions || []} />
+      </section>
 
-          <div className="p-4 rounded-lg bg-surface-card/40 border border-surface-border">
-            <span className="text-xs font-mono text-slate-400">Evidence Records:</span>
-            <div className="text-2xl font-bold font-mono text-slate-200 mt-1 flex items-center gap-2">
-              <ShieldCheck className="w-6 h-6 text-sky-400" />
-              <span>{incident.evidence?.length || 0}</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Section 6: On-Chain Messages */}
+      <section id="messages" className="scroll-mt-20">
+        <OnChainMessages messages={incident.on_chain_messages || []} />
+      </section>
 
-      {/* Tripartite Breakdown: Facts vs Reported vs Unverified */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Observed Facts */}
-        <div className="bg-surface-panel border border-emerald-800/40 rounded-xl p-5 space-y-3">
-          <div className="flex items-center gap-2 pb-2 border-b border-surface-border">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <h3 className="font-mono text-sm font-bold text-emerald-300 uppercase tracking-wide">
-              1. Observed Facts
-            </h3>
-          </div>
-          <p className="text-xs text-slate-400 font-mono">
-            Cryptographically verified directly on the Bitcoin blockchain.
-          </p>
-          <ul className="space-y-2 pt-2 text-xs text-slate-200 font-sans">
-            {incident.facts?.map((fact, i) => (
-              <li key={i} className="flex items-start gap-2 bg-emerald-950/20 p-2.5 rounded border border-emerald-900/40">
-                <span className="text-emerald-400 font-bold">&bull;</span>
-                <span>{fact}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+      {/* Section 7: Evidence & Certainty Breakdown */}
+      <section id="evidence" className="scroll-mt-20">
+        <EvidenceCertaintyPanel
+          claims={incident.structured_claims}
+          evidence={evidence}
+        />
+      </section>
 
-        {/* Reported Information */}
-        <div className="bg-surface-panel border border-purple-800/40 rounded-xl p-5 space-y-3">
-          <div className="flex items-center gap-2 pb-2 border-b border-surface-border">
-            <Info className="w-4 h-4 text-purple-400" />
-            <h3 className="font-mono text-sm font-bold text-purple-300 uppercase tracking-wide">
-              2. Reported Info
-            </h3>
-          </div>
-          <p className="text-xs text-slate-400 font-mono">
-            Corroborated security advisories and official party statements.
-          </p>
-          <ul className="space-y-2 pt-2 text-xs text-slate-200 font-sans">
-            {incident.reported_claims?.map((claim, i) => (
-              <li key={i} className="flex items-start gap-2 bg-purple-950/20 p-2.5 rounded border border-purple-900/40">
-                <span className="text-purple-400 font-bold">&bull;</span>
-                <span>{claim}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+      {/* Section 8: Technical Root Cause & Remediation */}
+      <section id="technical" className="scroll-mt-20">
+        <TechnicalFindingPanel findings={incident.technical_findings || []} />
+      </section>
 
-        {/* Unverified Claims */}
-        <div className="bg-surface-panel border border-amber-800/40 rounded-xl p-5 space-y-3">
-          <div className="flex items-center gap-2 pb-2 border-b border-surface-border">
-            <FileQuestion className="w-4 h-4 text-amber-400" />
-            <h3 className="font-mono text-sm font-bold text-amber-300 uppercase tracking-wide">
-              3. Unverified Claims
-            </h3>
-          </div>
-          <p className="text-xs text-slate-400 font-mono">
-            Heuristic clustering &amp; community assertions requiring verification.
-          </p>
-          <ul className="space-y-2 pt-2 text-xs text-slate-200 font-sans">
-            {incident.unverified_claims?.map((claim, i) => (
-              <li key={i} className="flex items-start gap-2 bg-amber-950/20 p-2.5 rounded border border-amber-900/40">
-                <span className="text-amber-400 font-bold">&bull;</span>
-                <span>{claim}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
+      {/* Section 9: Attribution & Advisory Sources */}
+      <section id="sources" className="scroll-mt-20">
+        <SourceList sources={incident.sources || []} />
+      </section>
 
-      {/* Transaction Graph Visualization Placeholder */}
-      <div className="bg-surface-panel border border-surface-border rounded-xl p-6 space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-surface-border">
-          <h3 className="text-base font-bold font-mono text-slate-100 flex items-center gap-2">
-            <Network className="w-5 h-5 text-amber-500" />
-            <span>Interactive Fund Flow &amp; Transaction Graph</span>
-          </h3>
-          <span className="text-xs font-mono text-slate-400 bg-surface-card px-2.5 py-1 rounded border border-surface-border">
-            Engine: Directed DAG (Phase 4 Target)
-          </span>
-        </div>
+      {/* Section 10: Investigation Updates & Historical Snapshots */}
+      <section id="updates" className="scroll-mt-20">
+        <IncidentUpdateHistory updates={incident.updates || []} />
+      </section>
 
-        <div className="h-48 border border-dashed border-surface-border rounded-lg bg-[#06080D] flex flex-col items-center justify-center p-6 text-center space-y-2">
-          <Network className="w-8 h-8 text-amber-500/60 animate-pulse" />
-          <p className="text-sm font-mono text-slate-300">
-            Graph Topology Model: 24 Destination UTXOs &bull; 4 Aggregation Stages
-          </p>
-          <p className="text-xs text-slate-400 max-w-md">
-            Visual transaction DAG rendering module connects directly to the backend{' '}
-            <code className="text-amber-400 font-mono">obschain-intelligence::TransactionGraph</code> API.
-          </p>
-        </div>
-      </div>
-
-      {/* Associated Transactions & Blocks */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Transactions */}
-        <div className="bg-surface-panel border border-surface-border rounded-xl p-6 space-y-4">
-          <h3 className="text-sm font-bold font-mono text-slate-200 flex items-center gap-2">
-            <Database className="w-4 h-4 text-amber-500" />
-            <span>Associated Transactions ({incident.associated_txids?.length || 0})</span>
-          </h3>
-          <div className="space-y-2">
-            {incident.associated_txids?.map((txid) => (
-              <div key={txid} className="p-2.5 rounded bg-surface-card border border-surface-border">
-                <TransactionLink txid={txid} truncate={false} />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Blocks */}
-        <div className="bg-surface-panel border border-surface-border rounded-xl p-6 space-y-4">
-          <h3 className="text-sm font-bold font-mono text-slate-200 flex items-center gap-2">
-            <Layers className="w-4 h-4 text-sky-400" />
-            <span>Associated Block Heights ({incident.associated_block_heights?.length || 0})</span>
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {incident.associated_block_heights?.map((height) => (
-              <BlockLink key={height} height={height} />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Incident Timeline */}
-      <div className="bg-surface-panel border border-surface-border rounded-xl p-6 sm:p-8 space-y-6">
-        <div className="flex items-center justify-between pb-4 border-b border-surface-border">
-          <h3 className="text-lg font-bold font-mono text-slate-100 flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-amber-500" />
-            <span>Incident Chronology &amp; Timeline</span>
-          </h3>
-          <span className="text-xs font-mono text-slate-400">
-            {incident.timeline?.length || 0} Key Milestones
-          </span>
-        </div>
-
-        <Timeline events={incident.timeline} />
-      </div>
-
-      {/* Evidence & Sources */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Evidence List */}
-        <div className="bg-surface-panel border border-surface-border rounded-xl p-6 space-y-4">
-          <h3 className="text-sm font-bold font-mono text-slate-100 flex items-center gap-2 pb-2 border-b border-surface-border">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Evidence Records &amp; Provenance</span>
-          </h3>
-          <div className="space-y-3">
-            {incident.evidence?.map((ev) => (
-              <div key={ev.id} className="p-3 rounded-lg bg-surface-card/60 border border-surface-border space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono text-slate-300 font-semibold">{ev.evidence_type}</span>
-                  <EvidenceBadge classification={ev.classification} />
-                </div>
-                <p className="text-xs text-slate-200">{ev.description}</p>
-                <div className="text-[11px] font-mono text-slate-400 truncate">Ref: {ev.reference}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Sources List */}
-        <div className="bg-surface-panel border border-surface-border rounded-xl p-6 space-y-4">
-          <h3 className="text-sm font-bold font-mono text-slate-100 flex items-center gap-2 pb-2 border-b border-surface-border">
-            <ExternalLink className="w-4 h-4 text-sky-400" />
-            <span>Attribution &amp; Advisory Sources</span>
-          </h3>
-          <div className="space-y-3">
-            {incident.sources?.map((src) => (
-              <div key={src.id} className="p-3 rounded-lg bg-surface-card/60 border border-surface-border flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-slate-200">{src.name}</div>
-                  <div className="text-[11px] font-mono text-slate-400">
-                    Reliability score: {(src.reliability_score * 100).toFixed(0)}%
-                  </div>
-                </div>
-                {src.url && (
-                  <a
-                    href={src.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-1.5 rounded hover:bg-surface-panel text-amber-400 transition-colors"
-                    title={src.url}
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      {/* Section 11: Raw Incident Dossier (JSON) */}
+      <section id="raw" className="scroll-mt-20">
+        <RawDossierView incident={incident} />
+      </section>
     </div>
   );
 };

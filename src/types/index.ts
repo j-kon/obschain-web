@@ -187,22 +187,30 @@ export interface EventsResponse {
 }
 
 // -------------------------------------------------------------
-// Incident Models (Preserved for Future Incident Features)
+// Incident Intelligence & Provenance Models
 // -------------------------------------------------------------
+
+export type Chain = 'BITCOIN' | 'LIQUID';
 
 export type ProvenanceClassification =
   | 'ON_CHAIN_VERIFIED'
   | 'OFFICIALLY_ATTRIBUTED'
-  | 'HIGH_CONFIDENCE_REPORTING'
+  | 'REPUTABLE_REPORTING'
+  | 'HIGH_CONFIDENCE_REPORTING' // backward compat
   | 'HEURISTIC'
   | 'UNVERIFIED'
   | 'DISPUTED';
 
 export type IncidentStatus =
-  | 'OPEN'
+  | 'DETECTED'
   | 'INVESTIGATING'
-  | 'MITIGATED'
+  | 'VERIFIED'
+  | 'MONITORING'
+  | 'RECOVERY'
+  | 'RESOLVED'
   | 'CLOSED'
+  | 'OPEN' // legacy
+  | 'MITIGATED' // legacy
   | 'DISPUTED';
 
 export type EvidenceType =
@@ -210,56 +218,242 @@ export type EvidenceType =
   | 'ON_CHAIN_BLOCK'
   | 'MEMPOOL_SNAPSHOT'
   | 'OFFICIAL_STATEMENT'
+  | 'OFFICIAL_TECHNICAL_REPORT'
   | 'SECURITY_ADVISORY'
+  | 'SOURCE_REPOSITORY'
   | 'HEURISTIC_CLUSTER'
-  | 'DISPUTED_CLAIM';
+  | 'DISPUTED_CLAIM'
+  | 'INDEPENDENT_REPORTING';
+
+export type SourceCategory =
+  | 'BITCOIN_BLOCKCHAIN'
+  | 'LIQUID_BLOCKCHAIN'
+  | 'OFFICIAL_TECHNICAL_REPORT'
+  | 'OFFICIAL_PUBLIC_STATEMENT'
+  | 'SOURCE_REPOSITORY'
+  | 'SECURITY_ADVISORY'
+  | 'INDEPENDENT_REPORTING';
+
+export type TransactionRole =
+  | 'EXPLOIT'
+  | 'PEG_OUT'
+  | 'TRANSFER'
+  | 'FORWARDING'
+  | 'RETURN'
+  | 'RECOVERY'
+  | 'COMMUNICATION'
+  | 'OTHER';
+
+export type TimelineCategory =
+  | 'EXPLOIT'
+  | 'ON_CHAIN_MOVEMENT'
+  | 'DISCOVERY'
+  | 'CONTAINMENT'
+  | 'COMMUNICATION'
+  | 'DISCLOSURE'
+  | 'PATCH'
+  | 'RECOVERY'
+  | 'NETWORK_RESTART'
+  | 'OTHER';
+
+export interface RecoverySummary {
+  affected_sats: number;
+  recovered_sats: number;
+  outstanding_sats: number;
+  as_of_timestamp: string;
+  source?: string | null;
+  is_estimate: boolean;
+}
+
+export interface StructuredClaimsSummary {
+  verified_on_chain: string[];
+  officially_attributed: string[];
+  reported: string[];
+  heuristic: string[];
+  unknown: string[];
+}
+
+export interface Source {
+  id: string;
+  publisher: string;
+  title: string;
+  url?: string | null;
+  publication_timestamp?: string | null;
+  retrieved_timestamp?: string | null;
+  source_category: SourceCategory;
+  reliability_score: number;
+  name?: string | null;
+  published_at?: string | null; // legacy
+}
 
 export interface Evidence {
   id: string;
   incident_id: string;
   evidence_type: EvidenceType;
-  classification: ProvenanceClassification;
+  confidence: ProvenanceClassification;
+  title?: string;
   description: string;
-  reference: string;
+  observed_at?: string | null;
+  source_id?: string | null;
+  source_reference?: string | null;
+  txid?: string | null;
+  block_hash?: string | null;
+  block_height?: number | null;
+  chain?: Chain;
+  verified: boolean;
   raw_data?: Record<string, unknown> | null;
   created_at: string;
+  reference?: string | null;
+  classification?: ProvenanceClassification | null;
 }
 
-export interface TimelineEvent {
+export interface IncidentTransaction {
+  chain: Chain;
+  txid: string;
+  role: TransactionRole;
+  amount_sats?: number | null;
+  block_height?: number | null;
+  block_hash?: string | null;
+  confirmed_at?: string | null;
+  evidence_id?: string | null;
+  notes?: string | null;
+}
+
+export interface IncidentBlock {
+  chain: Chain;
+  height: number;
+  hash: string;
+  timestamp: string;
+  tx_count?: number | null;
+  evidence_id?: string | null;
+}
+
+export interface IncidentEntity {
+  id: string;
+  name: string;
+  entity_type: string;
+  description: string;
+  attribution_confidence: ProvenanceClassification;
+}
+
+export interface OnChainMessage {
+  txid: string;
+  chain: Chain;
+  encoding: string;
+  decoded_text: string;
+  raw_hex: string;
+  confirmed_at?: string | null;
+  block_height?: number | null;
+  attributed_sender?: string | null;
+  sender_attribution_confidence: ProvenanceClassification;
+}
+
+export interface TimelineEntry {
   id: string;
   timestamp: string;
   title: string;
   description: string;
-  evidence_id?: string | null;
+  category: TimelineCategory;
+  source_id?: string | null;
+  evidence_ids: string[];
+  transaction_txids: string[];
+  block_heights: number[];
   classification: ProvenanceClassification;
+  // Legacy compatibility:
+  evidence_id?: string | null;
 }
 
-export interface Source {
+// Backward-compatibility alias
+export type TimelineEvent = TimelineEntry;
+
+export interface TechnicalFinding {
+  component: string;
+  area: string;
+  category: string;
+  summary: string;
+  root_cause_details: string;
+  fix_summary: string;
+  repository_url?: string | null;
+  pull_request_id?: string | null;
+  commit_hash?: string | null;
+}
+
+export interface IncidentUpdate {
   id: string;
-  name: string;
-  url?: string | null;
-  reliability_score: number;
-  published_at?: string | null;
+  timestamp: string;
+  title: string;
+  summary: string;
+  source_id?: string | null;
+  recovery_state?: RecoverySummary | null;
+}
+
+export type GraphNodeType =
+  | 'TRANSACTION'
+  | 'BLOCK'
+  | 'ADDRESS'
+  | 'ENTITY'
+  | 'SOURCE'
+  | 'EVIDENCE';
+
+export type GraphEdgeType =
+  | 'SPENDS'
+  | 'CONFIRMED_IN'
+  | 'FORWARDS_TO'
+  | 'RETURNS_TO'
+  | 'REFERENCES'
+  | 'SUPPORTS'
+  | 'ATTRIBUTED_TO'
+  | 'POSSIBLY_RELATED';
+
+export interface GraphNode {
+  id: string;
+  label: string;
+  node_type: GraphNodeType;
+  chain?: Chain | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  relationship: GraphEdgeType;
+  confidence: ProvenanceClassification;
+}
+
+export interface IncidentGraph {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
 }
 
 export interface Incident {
   id: string;
+  case_id: string;
   title: string;
   summary: string;
   status: IncidentStatus;
   severity: EventSeverity;
+  recovery: RecoverySummary;
   total_btc_affected: number;
   total_btc_recovered: number;
   first_observed_at: string;
   last_updated_at: string;
-  facts: string[];
-  reported_claims: string[];
-  unverified_claims: string[];
-  associated_txids: string[];
-  associated_block_heights: number[];
-  timeline: TimelineEvent[];
+  structured_claims: StructuredClaimsSummary;
+  entities: IncidentEntity[];
+  transactions: IncidentTransaction[];
+  blocks: IncidentBlock[];
+  on_chain_messages: OnChainMessage[];
+  timeline: TimelineEntry[];
   evidence: Evidence[];
   sources: Source[];
+  technical_findings: TechnicalFinding[];
+  updates: IncidentUpdate[];
+  graph: IncidentGraph;
+  // Legacy / fallback fields:
+  facts?: string[];
+  reported_claims?: string[];
+  unverified_claims?: string[];
+  associated_txids?: string[];
+  associated_block_heights?: number[];
 }
 
 export interface IncidentsResponse {
@@ -268,6 +462,20 @@ export interface IncidentsResponse {
   limit: number;
   offset: number;
   is_mock_feed: boolean;
+}
+
+export interface IncidentTimelineResponse {
+  incident_id: string;
+  case_id: string;
+  timeline: TimelineEntry[];
+  count: number;
+}
+
+export interface IncidentEvidenceResponse {
+  incident_id: string;
+  case_id: string;
+  evidence: Evidence[];
+  count: number;
 }
 
 // WebSocket Connection State
