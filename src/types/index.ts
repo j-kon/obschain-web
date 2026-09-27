@@ -138,6 +138,7 @@ export interface ChainEvent {
   txid?: string | null;
   source?: ObservationSource | null;
   metadata: Record<string, unknown>;
+  rarity?: import('./rarity').EventEnrichedRarity | null;
 }
 
 // -------------------------------------------------------------
@@ -485,3 +486,8 @@ export type ConnectionState =
   | 'reconnecting'
   | 'disconnected'
   | 'error';
+
+// -------------------------------------------------------------
+// Re-export Event Intelligence, Rarity, and Baseline Models
+// -------------------------------------------------------------
+export * from './rarity';

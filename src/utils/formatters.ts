@@ -13,8 +13,15 @@
 export function formatSats(sats: number | bigint | string | null | undefined): string {
   if (sats === null || sats === undefined) return '0 sats';
   try {
-    const val = typeof sats === 'bigint' ? sats : BigInt(Math.trunc(Number(sats)));
-    return `${val.toLocaleString()} sats`;
+    if (typeof sats === 'bigint') {
+      return `${sats.toLocaleString('en-US')} sats`;
+    }
+    if (typeof sats === 'string') {
+      const clean = sats.trim().split('.')[0];
+      return `${BigInt(clean).toLocaleString('en-US')} sats`;
+    }
+    const val = BigInt(Math.trunc(sats));
+    return `${val.toLocaleString('en-US')} sats`;
   } catch {
     return '0 sats';
   }
@@ -45,7 +52,12 @@ export function formatBtcFromSats(
   } = options || {};
 
   try {
-    const rawBigInt = typeof sats === 'bigint' ? sats : BigInt(Math.trunc(Number(sats)));
+    const rawBigInt =
+      typeof sats === 'bigint'
+        ? sats
+        : typeof sats === 'string'
+          ? BigInt(sats.trim().split('.')[0])
+          : BigInt(Math.trunc(sats));
     const isNegative = rawBigInt < 0n;
     const absBigInt = isNegative ? -rawBigInt : rawBigInt;
 
@@ -229,3 +241,154 @@ export function formatRelativeTime(isoString: string): string {
     return 'recently';
   }
 }
+
+/**
+ * Format BTC amount alias matching formatBtcFromSats.
+ */
+export function formatBtc(
+  sats: number | bigint | string | null | undefined,
+  options?: Parameters<typeof formatBtcFromSats>[1]
+): string {
+  return formatBtcFromSats(sats, options);
+}
+
+/**
+ * Format population count as integer with thousands separators.
+ */
+export function formatPopulation(count: number | bigint | string | null | undefined): string {
+  if (count === null || count === undefined) return '0';
+  try {
+    if (typeof count === 'bigint') {
+      return count.toLocaleString('en-US');
+    }
+    if (typeof count === 'string') {
+      const clean = count.trim().split('.')[0];
+      return BigInt(clean).toLocaleString('en-US');
+    }
+    return BigInt(Math.trunc(count)).toLocaleString('en-US');
+  } catch {
+    return String(count);
+  }
+}
+
+/**
+ * Format percentile with exact or estimated precision.
+ * e.g. 99.94 -> "99.94th percentile", or with tilde if estimated: "≈ 99.47th percentile"
+ */
+export function formatPercentile(
+  percentile: number | null | undefined,
+  options?: {
+    estimated?: boolean;
+    includeSuffix?: boolean;
+    decimals?: number;
+  }
+): string {
+  if (percentile === null || percentile === undefined || isNaN(percentile)) {
+    return 'N/A';
+  }
+
+  const { estimated = false, includeSuffix = true, decimals = 2 } = options || {};
+  const formattedNumber = percentile.toFixed(decimals);
+
+  let suffix = '';
+  if (includeSuffix) {
+    const lastDigit = Math.floor(percentile) % 10;
+    const lastTwoDigits = Math.floor(percentile) % 100;
+    if (lastTwoDigits >= 11 && lastTwoDigits <= 13) {
+      suffix = 'th';
+    } else if (lastDigit === 1) {
+      suffix = 'st';
+    } else if (lastDigit === 2) {
+      suffix = 'nd';
+    } else if (lastDigit === 3) {
+      suffix = 'rd';
+    } else {
+      suffix = 'th';
+    }
+  }
+
+  const prefix = estimated ? '≈ ' : '';
+  const suffixStr = includeSuffix ? `${suffix} percentile` : '%';
+  return `${prefix}${formattedNumber}${suffixStr}`;
+}
+
+/**
+ * Format basis points (1 bp = 0.01%).
+ * e.g. 9999 -> "99.99%"
+ */
+export function formatBasisPoints(bp: number | null | undefined): string {
+  if (bp === null || bp === undefined || isNaN(bp)) {
+    return 'N/A';
+  }
+  return `${(bp / 100).toFixed(2)}%`;
+}
+
+/**
+ * Format duration in seconds into human-readable duration (e.g. "1h 42m 15s", "45s", "12m 30s").
+ */
+export function formatDuration(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined || isNaN(seconds) || seconds < 0) {
+    return '0s';
+  }
+  const sec = Math.floor(seconds);
+  const hours = Math.floor(sec / 3600);
+  const minutes = Math.floor((sec % 3600) / 60);
+  const remainingSeconds = sec % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${remainingSeconds}s`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${remainingSeconds}s`;
+  }
+  return `${remainingSeconds}s`;
+}
+
+/**
+ * Format coin age into human-readable string.
+ */
+export function formatCoinAge(days: number | null | undefined, seconds?: number | null): string {
+  if (days === null || days === undefined || isNaN(days)) {
+    return 'N/A';
+  }
+  return formatAge(days, seconds ?? undefined);
+}
+
+/**
+ * Format generic metric value based on metric name and unit.
+ */
+export function formatMetricValue(
+  value: string | number | bigint | null | undefined,
+  metricName: string,
+  unit?: string
+): string {
+  if (value === null || value === undefined) return 'N/A';
+  const valStr = String(value);
+
+  const lower = metricName.toLowerCase();
+  if (lower.includes('sats') || lower.includes('satoshis') || unit === 'satoshis') {
+    return formatBtcFromSats(valStr);
+  }
+  if (lower.includes('fee_rate') || unit === 'sat/vB') {
+    const num = Number(valStr);
+    return isNaN(num) ? `${valStr} sat/vB` : formatFeeRate(num);
+  }
+  if (lower.includes('coin_age_destroyed') || unit === 'satoshi-days') {
+    return `${valStr} satoshi-days`;
+  }
+  if (lower.includes('ratio') || unit === 'basis-points') {
+    const num = Number(valStr);
+    return isNaN(num) ? valStr : formatBasisPoints(num);
+  }
+  if (lower.includes('age_days')) {
+    const num = Number(valStr);
+    return isNaN(num) ? `${valStr} days` : formatCoinAge(num);
+  }
+  if (lower.includes('interval_seconds')) {
+    const num = Number(valStr);
+    return isNaN(num) ? `${valStr}s` : formatDuration(num);
+  }
+
+  return valStr;
+}
+

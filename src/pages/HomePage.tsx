@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Radio,
@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   RefreshCw,
   SlidersHorizontal,
+  Sparkles,
 } from 'lucide-react';
 import { useEvents } from '../context/EventContext';
 import { fetchIncidents } from '../api';
@@ -17,6 +18,8 @@ import { IncidentCard } from '../components/IncidentCard';
 import { LoadingState } from '../components/LoadingState';
 import { ErrorState } from '../components/ErrorState';
 import { LiveIndicator } from '../components/LiveIndicator';
+import { RarityBadge } from '../components/rarity';
+import { formatRelativeTime } from '../utils/formatters';
 
 export const HomePage: React.FC = () => {
   const {
@@ -53,6 +56,21 @@ export const HomePage: React.FC = () => {
       mounted = false;
     };
   }, []);
+
+  const unusualEvents = useMemo(() => {
+    return events
+      .filter((ev) => {
+        const band = ev.rarity?.primary?.band;
+        if (band === 'EXTREME' || band === 'RARE' || band === 'UNUSUAL') {
+          return true;
+        }
+        if (ev.rarity?.primary?.percentile !== undefined && ev.rarity?.primary?.percentile !== null) {
+          return ev.rarity.primary.percentile >= 95.0;
+        }
+        return ev.severity === 'CRITICAL' || ev.severity === 'HIGH';
+      })
+      .slice(0, 3);
+  }, [events]);
 
   return (
     <div className="space-y-10">
@@ -119,6 +137,66 @@ export const HomePage: React.FC = () => {
           connectionState={connectionState}
           loading={loading}
         />
+      </section>
+
+      {/* Restrained Latest Unusual Events (Empirical Tail Outliers) */}
+      <section className="p-5 rounded-xl border border-zinc-800 bg-zinc-950/60 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-zinc-800/80">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            <h2 className="text-sm font-bold font-mono uppercase tracking-wider text-zinc-200">
+              Latest Statistically Unusual Observations
+            </h2>
+            <span className="text-[11px] font-mono text-zinc-500">
+              (p &gt; 95.0% tail anomalies)
+            </span>
+          </div>
+          <Link
+            to="/events"
+            className="text-xs font-mono text-amber-400 hover:text-amber-300 flex items-center gap-1"
+          >
+            <span>View all anomalies &rarr;</span>
+          </Link>
+        </div>
+
+        {unusualEvents.length === 0 ? (
+          <div className="py-4 text-center text-xs font-mono text-zinc-500">
+            No statistical tail outliers (&gt; p95.0) detected in current observation window.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {unusualEvents.map((ev) => (
+              <Link
+                key={ev.id}
+                to={`/events/${ev.id}`}
+                className="group block p-3.5 rounded-lg border border-zinc-800/80 hover:border-amber-500/40 bg-zinc-900/60 hover:bg-zinc-900 transition-all space-y-2"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <RarityBadge
+                    band={ev.rarity?.primary?.band || (ev.severity === 'CRITICAL' ? 'EXTREME' : 'UNUSUAL')}
+                    size="sm"
+                    showLabel={true}
+                  />
+                  {ev.rarity?.primary?.percentile && (
+                    <span className="text-xs font-mono text-zinc-400 font-semibold">
+                      p{ev.rarity.primary.percentile.toFixed(2)}
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs font-mono font-semibold text-zinc-200 group-hover:text-amber-400 truncate">
+                  {ev.title}
+                </div>
+                <div className="text-[11px] font-sans text-zinc-400 line-clamp-2 leading-relaxed">
+                  {ev.description}
+                </div>
+                <div className="flex items-center justify-between pt-1 text-[10px] font-mono text-zinc-500">
+                  <span>{formatRelativeTime(ev.detected_at)}</span>
+                  <span className="text-amber-400/80 group-hover:underline">Inspect &rarr;</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Main Grid: Live Observation Feed + Active Incidents Panel */}

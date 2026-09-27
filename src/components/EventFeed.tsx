@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Filter, ArrowUp, X, Radio } from 'lucide-react';
-import { ChainEvent, EventType, EventSeverity } from '../types';
+import { Search, Filter, ArrowUp, X, Radio, ArrowUpDown, Sparkles } from 'lucide-react';
+import { ChainEvent, EventType, EventSeverity, RarityBand } from '../types';
 import { EventCard } from './EventCard';
 import { EmptyState } from './EmptyState';
 
@@ -9,9 +9,10 @@ interface EventFeedProps {
   limit?: number;
   newEventCount?: number;
   onClearNewEvents?: () => void;
+  defaultRarityFilter?: RarityFilter;
 }
 
-type FilterCategory =
+export type FilterCategory =
   | 'ALL'
   | 'LARGE_TRANSFER'
   | 'DORMANT_COINS_MOVED'
@@ -21,7 +22,9 @@ type FilterCategory =
   | 'TRANSACTION_REPLACEMENT'
   | 'LONG_BLOCK_INTERVAL';
 
-type TimeFilter = 'ALL' | '1H' | '24H' | '7D';
+export type TimeFilter = 'ALL' | '1H' | '24H' | '7D';
+export type RarityFilter = 'ALL' | RarityBand;
+export type SortOption = 'NEWEST' | 'OLDEST' | 'SEVERITY' | 'RARITY_PERCENTILE';
 
 const CATEGORY_TABS: { id: FilterCategory; label: string }[] = [
   { id: 'ALL', label: 'All' },
@@ -39,16 +42,19 @@ export const EventFeed: React.FC<EventFeedProps> = ({
   limit,
   newEventCount = 0,
   onClearNewEvents,
+  defaultRarityFilter = 'ALL',
 }) => {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<FilterCategory>('ALL');
   const [severity, setSeverity] = useState<EventSeverity | 'ALL'>('ALL');
+  const [rarityFilter, setRarityFilter] = useState<RarityFilter>(defaultRarityFilter);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('ALL');
+  const [sortBy, setSortBy] = useState<SortOption>('NEWEST');
 
-  const filteredEvents = useMemo(() => {
+  const filteredAndSortedEvents = useMemo(() => {
     const now = Date.now();
 
-    return events.filter((ev) => {
+    const filtered = events.filter((ev) => {
       // 1. Category Filter
       if (category !== 'ALL') {
         if (category === 'DORMANT_COINS_MOVED') {
@@ -82,7 +88,15 @@ export const EventFeed: React.FC<EventFeedProps> = ({
         return false;
       }
 
-      // 3. Time Filter
+      // 3. Rarity Band Filter
+      if (rarityFilter !== 'ALL') {
+        const band = ev.rarity?.primary?.band || ev.rarity?.primary?.rarity_band;
+        if (band !== rarityFilter) {
+          return false;
+        }
+      }
+
+      // 4. Time Filter
       if (timeFilter !== 'ALL') {
         const evTime = new Date(ev.detected_at).getTime();
         const ageMs = now - evTime;
@@ -91,7 +105,7 @@ export const EventFeed: React.FC<EventFeedProps> = ({
         if (timeFilter === '7D' && ageMs > 7 * 24 * 60 * 60 * 1000) return false;
       }
 
-      // 4. Search Filter
+      // 5. Search Filter
       if (search.trim()) {
         const query = search.toLowerCase().trim();
         const matchesTitle = ev.title.toLowerCase().includes(query);
@@ -109,18 +123,58 @@ export const EventFeed: React.FC<EventFeedProps> = ({
 
       return true;
     });
-  }, [events, category, severity, timeFilter, search]);
 
-  const displayedEvents = limit ? filteredEvents.slice(0, limit) : filteredEvents;
+    // Sorting (Respecting invariant: No cross-event Impact sorting allowed)
+    const result = [...filtered];
+    switch (sortBy) {
+      case 'OLDEST':
+        result.sort((a, b) => new Date(a.detected_at).getTime() - new Date(b.detected_at).getTime());
+        break;
+      case 'SEVERITY': {
+        const rank: Record<EventSeverity, number> = {
+          CRITICAL: 5,
+          HIGH: 4,
+          MEDIUM: 3,
+          LOW: 2,
+          INFO: 1,
+        };
+        result.sort((a, b) => (rank[b.severity] || 0) - (rank[a.severity] || 0));
+        break;
+      }
+      case 'RARITY_PERCENTILE': {
+        result.sort((a, b) => {
+          const pA = a.rarity?.primary?.percentile ?? -1;
+          const pB = b.rarity?.primary?.percentile ?? -1;
+          return pB - pA;
+        });
+        break;
+      }
+      case 'NEWEST':
+      default:
+        result.sort((a, b) => new Date(b.detected_at).getTime() - new Date(a.detected_at).getTime());
+        break;
+    }
+
+    return result;
+  }, [events, category, severity, rarityFilter, timeFilter, search, sortBy]);
+
+  const displayedEvents = limit ? filteredAndSortedEvents.slice(0, limit) : filteredAndSortedEvents;
 
   const hasActiveFilters =
-    category !== 'ALL' || severity !== 'ALL' || timeFilter !== 'ALL' || search.trim() !== '';
+    category !== 'ALL' ||
+    severity !== 'ALL' ||
+    rarityFilter !== 'ALL' ||
+    timeFilter !== 'ALL' ||
+    search.trim() !== '' ||
+    sortBy !== 'NEWEST';
 
   const handleResetFilters = () => {
     setCategory('ALL');
     setSeverity('ALL');
+    setRarityFilter('ALL');
     setTimeFilter('ALL');
     setSearch('');
+    setSortBy('NEWEST');
   };
 
   return (
@@ -146,7 +200,8 @@ export const EventFeed: React.FC<EventFeedProps> = ({
       </div>
 
       {/* Search and Secondary Filter Controls */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col lg:flex-row gap-3">
+        {/* Search input */}
         <div className="relative flex-1">
           <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
           <input
@@ -167,7 +222,27 @@ export const EventFeed: React.FC<EventFeedProps> = ({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Filter selects row */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Rarity Band selector */}
+          <div className="relative flex items-center">
+            <Sparkles className="absolute left-2.5 w-3.5 h-3.5 text-amber-400 pointer-events-none" />
+            <select
+              value={rarityFilter}
+              onChange={(e) => setRarityFilter(e.target.value as RarityFilter)}
+              className="bg-surface-panel border border-surface-border rounded-lg text-xs text-slate-200 pl-8 pr-7 py-2 focus:outline-none focus:border-amber-500/50 font-mono"
+              aria-label="Filter by Rarity Band"
+            >
+              <option value="ALL">All Rarity Bands</option>
+              <option value="EXTREME">Extreme (&gt; 99.9%)</option>
+              <option value="RARE">Rare (&gt; 99.0%)</option>
+              <option value="UNUSUAL">Unusual (&gt; 95.0%)</option>
+              <option value="NOTABLE">Notable (&gt; 90.0%)</option>
+              <option value="COMMON">Common (&le; 90.0%)</option>
+              <option value="INSUFFICIENT_DATA">Insufficient Data</option>
+            </select>
+          </div>
+
           {/* Severity selector */}
           <div className="relative flex items-center">
             <Filter className="absolute left-2.5 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
@@ -175,6 +250,7 @@ export const EventFeed: React.FC<EventFeedProps> = ({
               value={severity}
               onChange={(e) => setSeverity(e.target.value as EventSeverity | 'ALL')}
               className="bg-surface-panel border border-surface-border rounded-lg text-xs text-slate-200 pl-8 pr-7 py-2 focus:outline-none focus:border-amber-500/50 font-mono"
+              aria-label="Filter by Severity"
             >
               <option value="ALL">All Severities</option>
               <option value="CRITICAL">Critical</option>
@@ -185,11 +261,28 @@ export const EventFeed: React.FC<EventFeedProps> = ({
             </select>
           </div>
 
+          {/* Sort selector */}
+          <div className="relative flex items-center">
+            <ArrowUpDown className="absolute left-2.5 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              className="bg-surface-panel border border-surface-border rounded-lg text-xs text-slate-200 pl-8 pr-7 py-2 focus:outline-none focus:border-amber-500/50 font-mono"
+              aria-label="Sort Events"
+            >
+              <option value="NEWEST">Newest First</option>
+              <option value="OLDEST">Oldest First</option>
+              <option value="SEVERITY">Severity Rank</option>
+              <option value="RARITY_PERCENTILE">Highest Percentile</option>
+            </select>
+          </div>
+
           {/* Time range selector */}
           <select
             value={timeFilter}
             onChange={(e) => setTimeFilter(e.target.value as TimeFilter)}
             className="bg-surface-panel border border-surface-border rounded-lg text-xs text-slate-200 px-3 py-2 focus:outline-none focus:border-amber-500/50 font-mono"
+            aria-label="Filter by Time"
           >
             <option value="ALL">All Time</option>
             <option value="1H">Past 1 Hour</option>

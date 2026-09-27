@@ -18,6 +18,9 @@ import { EvidenceBadge } from './EvidenceBadge';
 import { TransactionLink } from './TransactionLink';
 import { BlockLink } from './BlockLink';
 import { SourceBadge } from './SourceBadge';
+import { RarityBadge } from './rarity/RarityBadge';
+import { PercentileDisplay } from './rarity/PercentileDisplay';
+import { useEventRarity } from '../hooks/useEventRarity';
 import { formatRelativeTime, formatUtcTimestamp } from '../utils/formatters';
 
 // Specialized Cards
@@ -36,6 +39,9 @@ interface EventCardProps {
 export const EventCard: React.FC<EventCardProps> = ({ event }) => {
   const relativeTime = formatRelativeTime(event.detected_at);
   const utcTime = formatUtcTimestamp(event.detected_at);
+  const { rarity: fetchedRarity } = useEventRarity(event.rarity ? null : event.id);
+  const rarityData = event.rarity || fetchedRarity;
+  const primaryRarity = rarityData?.primary;
 
   const getEventIcon = (type: EventType) => {
     switch (type) {
@@ -106,6 +112,28 @@ export const EventCard: React.FC<EventCardProps> = ({ event }) => {
             <span>{event.event_type.replace(/_/g, ' ')}</span>
           </span>
           {event.source && <SourceBadge source={event.source} short={true} />}
+          {primaryRarity && (
+            <div className="flex items-center gap-1.5">
+              <RarityBadge band={primaryRarity.band} size="sm" showLabel={true} />
+              {primaryRarity.percentile !== null && primaryRarity.percentile !== undefined && (
+                <PercentileDisplay
+                  percentile={primaryRarity.percentile}
+                  method={primaryRarity.percentile_method}
+                  estimated={primaryRarity.estimated}
+                  size="sm"
+                  showMethodLabel={false}
+                />
+              )}
+            </div>
+          )}
+          {rarityData?.impact?.score !== null && rarityData?.impact?.score !== undefined && (
+            <span
+              className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-purple-950/40 text-purple-300 border border-purple-800/50"
+              title="Event-specific weighted impact model score"
+            >
+              Impact {rarityData.impact.score}/100
+            </span>
+          )}
         </div>
 
         <div
