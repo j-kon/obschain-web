@@ -297,8 +297,7 @@ export const EventDetailPage: React.FC<EventDetailPageProps> = ({
                 <span>Historical Rarity Temporarily Unavailable (503)</span>
               </div>
               <p className="text-amber-200/80">
-                Exact-rank storage indexer is currently unavailable or under maintenance.
-                Event observation details and metrics remain fully accessible.
+                Historical rarity temporarily unavailable. ObsChain could not access the statistical population required for this calculation. Exact-rank storage indexer is currently unavailable or under maintenance. Event observation details and metrics remain fully accessible.
               </p>
             </div>
           )}

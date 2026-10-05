@@ -19,7 +19,7 @@ export function mapRarityError(err: unknown): { isUnavailable503: boolean; error
   if (err instanceof ApiError && err.status === 503) {
     return {
       isUnavailable503: true,
-      error: 'Historical rarity computation is temporarily unavailable from the backend indexer.',
+      error: 'Historical rarity temporarily unavailable. ObsChain could not access the statistical population required for this calculation.',
     };
   }
   if (err instanceof ApiError && err.status === 404) {

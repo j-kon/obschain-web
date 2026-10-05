@@ -20,6 +20,79 @@ The platform provides two distinct, specialized operational interfaces:
 
 ---
 
+## Event Intelligence & Historical Rarity (Phase 7A)
+
+ObsChain provides sovereign, verifiable empirical context for Bitcoin network events and structural anomalies. Rather than relying on subjective hype scores or uncalibrated alarmism, ObsChain compares every event against canonical historical baseline distributions.
+
+### Rarity Classification & Visual Badges
+
+ObsChain assigns events to transparent statistical rarity bands based on historical populations:
+- **`EXTREME`**: Event value exceeds the 99.9th percentile (> 99.9%) of qualifying historical events. *Note: `EXTREME` indicates statistical rarity relative to history; it never implies criminality, malice, or danger.*
+- **`RARE`**: Event value is within the top 1% (> 99.0th percentile).
+- **`UNUSUAL`**: Event value is within the top 5% (> 95.0th percentile).
+- **`NOTABLE`**: Event value is within the top 10% (> 90.0th percentile).
+- **`COMMON`**: Standard on-chain activity within the 90th percentile (≤ 90.0%).
+- **`INSUFFICIENT_DATA`**: The historical baseline contains fewer than 100 qualifying canonical events, or baseline quality is insufficient.
+
+### Exact vs. Estimated Percentiles
+
+- **Exact Empirical CDF (`EXACT_EMPIRICAL_CDF`)**: Evaluated against actual observed event values in the indexed population (`estimated = false`). Rendered with an `EXACT` pill and full population context (e.g., `11 events at or above this value out of 18,421 comparable events`).
+- **Quantile Interpolation Estimate (`QUANTILE_INTERPOLATION_ESTIMATE`)**: Derived from piece-wise linear interpolation across calibrated quantiles (`p50`, `p75`, `p90`, `p95`, `p99`, `p99.9`). Rendered with an `ESTIMATE` pill and `≈` tilde prefix (e.g., `≈ 99.47th percentile`).
+
+### Insufficient Historical Data State
+
+When a baseline has fewer than 100 samples, the backend guarantees:
+```json
+{
+  "percentile": null,
+  "percentile_method": null,
+  "estimated": false,
+  "rarity_band": "INSUFFICIENT_DATA",
+  "tail_count": null,
+  "baseline_quality": "INSUFFICIENT"
+}
+```
+The frontend strictly renders `Unavailable` with an explanatory notice (`37 comparable events are indexed. ObsChain requires at least 100 samples before assigning a rarity percentile.`), never rendering misleading defaults like `0%`, `0th percentile`, or `COMMON`.
+
+### Baseline Quality & Context
+
+- **`HIGH`**: Complete historical coverage (≥1,000 samples, ≥98% coverage ratio).
+- **`MODERATE`**: Adequate sample size (≥100) and acceptable coverage (≥80%).
+- **`DEGRADED`**: Incomplete historical coverage; displayed percentiles are estimates.
+- **`INSUFFICIENT`**: Sample count below threshold (<100); percentiles cannot be reliably determined.
+
+The **`BaselineContextCard`** and **`CalculationDetails`** modal display frozen audit identity fields: `baseline_id`, `algorithm_version`, `metric_definition_version`, `network`, `start_height`, `end_height`, `sample_count`, `quality`, and `evaluation_mode`.
+
+### Experimental Impact Index (`ImpactBreakdownPanel`)
+
+Event-type-specific composite index (0–100) synthesizing primary and secondary structural metrics:
+- **Strict Non-Comparability Invariant**: Impact models differ by event type and cannot be compared across event types.
+- **Component Breakdown**: Displays points awarded vs max weight for each evaluated sub-component (e.g. dormant value, oldest input age, coin age destroyed, input count).
+- **Unavailable States**: Explicit handling for `INSUFFICIENT_BASELINE`, `INSUFFICIENT_COMPONENT_COVERAGE`, and `RARITY_UNAVAILABLE`.
+- **Partial Coverage**: Clearly communicates model coverage percentage when certain transaction components are unavailable.
+
+### Observation Lifecycle & Provenance
+
+Tracks the chronological journey of an event across multiple sources and transport layers:
+- `FIRST_SEEN`: Initial ingestion into ObsChain real-time pipeline.
+- `MEMPOOL_SEEN`: Observed unconfirmed in node mempool.
+- `CONFIRMED`: Verified on-chain in an accepted block.
+- `REORGED_OUT`: Chain reorganization during normal consensus resolution (not an exploit).
+- `WITNESSED`: Corroborated by independent secondary witness node.
+- `HISTORICAL_REPLAY`: Reconstructed from historical Bitcoin block archives (explicitly labeled `Reconstructed from historical Bitcoin data`, not `Observed live`).
+
+### Frozen Contract Fixture & Testing
+
+The frontend test suite validates against `src/__tests__/fixtures/rarity_contract.json`, an exact replica of the backend's frozen contract fixture `tests/fixtures/rarity_contract.json`. Test suites verify all 6 contract states:
+1. `exact_rarity` (Exact eCDF, EXTREME, HIGH quality)
+2. `estimated_rarity` (Quantile estimate, EXTREME, HIGH quality)
+3. `insufficient_data` (Null percentile, INSUFFICIENT_DATA, INSUFFICIENT quality)
+4. `full_impact` (EXPERIMENTAL, 85/100, 100% coverage)
+5. `partial_coverage_impact` (EXPERIMENTAL, 42.5/100, 50% coverage)
+6. `unavailable_impact` (score: null, INSUFFICIENT_BASELINE)
+
+---
+
 ## Incident Intelligence UI (Phase 3B)
 
 The Incident Desk (`/incidents`) and Incident Dossier (`/incidents/:id`) provide an exhaustive investigation environment for complex on-chain security incidents, beginning with **OC-2026-0001: Liquid Network Security Incident (September 2026)**.
@@ -90,8 +163,14 @@ Each case dossier (e.g. `/incidents/OC-2026-0001`) contains a comprehensive suit
 | `/api/v1/incidents/:id/evidence` | `GET` | Structured evidence records and provenance ratings. |
 | `/api/v1/incidents/:id/graph` | `GET` | Forensic relationship graph nodes and edges. |
 | `/api/v1/events` | `GET` | Live Bitcoin detector events stream. |
+| `/api/v1/events/:id` | `GET` | Single canonical chain event record. |
+| `/api/v1/events/:id/rarity` | `GET` | Historical rarity percentiles, tail counts, and impact index. |
+| `/api/v1/events/:id/observations` | `GET` | Chronological observation lifecycle and multi-witness provenance. |
+| `/api/v1/research/baselines` | `GET` | Historical baseline runs list with sample counts and height windows. |
+| `/api/v1/research/baselines/:id` | `GET` | Baseline run details with calibrated quantile distributions. |
+| `/api/v1/research/distributions` | `GET` | Query statistical distributions by event type and metric. |
 | `/api/v1/status` | `GET` | Pipeline health, tip height, and detector telemetry. |
-| `/api/v1/events/ws` | `WS` | Real-time WebSocket event broadcast. |
+| `/api/v1/ws` | `WS` | Real-time WebSocket event broadcast. |
 
 ---
 

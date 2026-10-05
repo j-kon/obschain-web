@@ -111,5 +111,97 @@ describe('Phase 7A: Error Isolation & 503 Non-Crashing Guarantee', () => {
       expect(html).toContain('Back to Events Feed');
       expect(html).toContain('Event observation not found');
     });
+
+    it('isolates observation error without affecting event detail or rarity rendering', () => {
+      const html = renderClean(
+        <MemoryRouter initialEntries={['/events/ev-test-503']}>
+          <EventDetailPage
+            initialEvent={mockEvent}
+            initialObservations={[]}
+          />
+        </MemoryRouter>
+      );
+
+      expect(html).toContain('Large 500 BTC Transfer in Block 860,000');
+      expect(html).toContain('Observation Lifecycle &amp; Witness Corroboration');
+      expect(html).toContain('0 recorded stages');
+    });
+  });
+
+  describe('Observation Lifecycle: Reorg & Multi-Witness Scenarios', () => {
+    it('renders full reorg lifecycle: CONFIRMED -> REORGED_OUT -> MEMPOOL_SEEN', () => {
+      const reorgObservations = [
+        {
+          id: 'obs-conf',
+          event_id: 'ev-reorg',
+          mode: 'LIVE' as const,
+          kind: 'CONFIRMED' as const,
+          source: { provider: 'bitcoin-core', transport: 'rpc' },
+          observed_at: '2026-09-27T10:00:00Z',
+          block_height: 860000,
+          block_hash: '00000000000000000001a1b2c3d4e5f6',
+        },
+        {
+          id: 'obs-reorg',
+          event_id: 'ev-reorg',
+          mode: 'LIVE' as const,
+          kind: 'REORGED_OUT' as const,
+          source: { provider: 'bitcoin-core', transport: 'zmq' },
+          observed_at: '2026-09-27T10:05:00Z',
+          block_height: 860000,
+          block_hash: '00000000000000000001a1b2c3d4e5f6',
+        },
+        {
+          id: 'obs-mempool',
+          event_id: 'ev-reorg',
+          mode: 'LIVE' as const,
+          kind: 'MEMPOOL_SEEN' as const,
+          source: { provider: 'mempool-space', transport: 'ws' },
+          observed_at: '2026-09-27T10:05:30Z',
+        },
+      ];
+
+      const html = renderClean(
+        <MemoryRouter>
+          <EventDetailPage
+            initialEvent={mockEvent}
+            initialObservations={reorgObservations}
+          />
+        </MemoryRouter>
+      );
+
+      // Verify all 3 lifecycle stages appear
+      expect(html).toContain('CONFIRMED');
+      expect(html).toContain('REORGED OUT');
+      expect(html).toContain('MEMPOOL SEEN');
+      // Verify reorg explanation doesn't label normal reorg as attack
+      expect(html).toContain('Not an exploit or attack');
+    });
+
+    it('renders historical replay observations with explicit reconstruction label', () => {
+      const replayObservations = [
+        {
+          id: 'obs-replay',
+          event_id: 'ev-replay',
+          mode: 'HISTORICAL_REPLAY' as const,
+          kind: 'HISTORICAL_REPLAY' as const,
+          source: { provider: 'historical-replay-engine', transport: 'batch' },
+          observed_at: '2026-09-27T12:00:00Z',
+          block_height: 700000,
+        },
+      ];
+
+      const html = renderClean(
+        <MemoryRouter>
+          <EventDetailPage
+            initialEvent={mockEvent}
+            initialObservations={replayObservations}
+          />
+        </MemoryRouter>
+      );
+
+      expect(html).toContain('HISTORICAL REPLAY');
+      expect(html).toContain('Reconstructed from historical Bitcoin data');
+    });
   });
 });
