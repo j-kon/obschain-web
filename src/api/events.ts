@@ -6,6 +6,12 @@ import {
   EventRarityResponse,
   EventsResponse,
 } from '../types';
+import {
+  isFixtureId,
+  getFixtureEvent,
+  getFixtureRarity,
+  getFixtureObservations,
+} from './fixtures';
 
 const rarityCache = new BoundedCache<string, EventRarityResponse>(200);
 const observationsCache = new BoundedCache<string, EventObservationsResponse>(200);
@@ -15,8 +21,11 @@ export async function fetchEvents(limit = 50, offset = 0): Promise<EventsRespons
 }
 
 export async function fetchEvent(id: string): Promise<ChainEvent> {
-  const cleanId = encodeURIComponent(id.trim());
-  return apiFetch<ChainEvent>(`/api/v1/events/${cleanId}`);
+  const cleanId = id.trim();
+  if (isFixtureId(cleanId)) {
+    return getFixtureEvent(cleanId);
+  }
+  return apiFetch<ChainEvent>(`/api/v1/events/${encodeURIComponent(cleanId)}`);
 }
 
 /**
@@ -28,7 +37,12 @@ export async function fetchEventRarity(
   baselineId?: string,
   bypassCache = false
 ): Promise<EventRarityResponse> {
-  const cleanId = encodeURIComponent(id.trim());
+  const cleanId = id.trim();
+
+  if (isFixtureId(cleanId)) {
+    return getFixtureRarity(cleanId);
+  }
+
   const cacheKey = baselineId ? `${cleanId}:${baselineId}` : cleanId;
 
   if (!bypassCache) {
@@ -37,7 +51,7 @@ export async function fetchEventRarity(
   }
 
   const query = baselineId ? `?baseline_id=${encodeURIComponent(baselineId)}` : '';
-  const result = await apiFetch<EventRarityResponse>(`/api/v1/events/${cleanId}/rarity${query}`);
+  const result = await apiFetch<EventRarityResponse>(`/api/v1/events/${encodeURIComponent(cleanId)}/rarity${query}`);
   rarityCache.set(cacheKey, result);
   return result;
 }
@@ -50,14 +64,19 @@ export async function fetchEventObservations(
   id: string,
   bypassCache = false
 ): Promise<EventObservationsResponse> {
-  const cleanId = encodeURIComponent(id.trim());
+  const cleanId = id.trim();
+
+  if (isFixtureId(cleanId)) {
+    return getFixtureObservations(cleanId);
+  }
 
   if (!bypassCache) {
     const cached = observationsCache.get(cleanId);
     if (cached) return cached;
   }
 
-  const result = await apiFetch<EventObservationsResponse>(`/api/v1/events/${cleanId}/observations`);
+  const result = await apiFetch<EventObservationsResponse>(`/api/v1/events/${encodeURIComponent(cleanId)}/observations`);
   observationsCache.set(cleanId, result);
   return result;
 }
+

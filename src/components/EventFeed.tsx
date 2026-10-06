@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Filter, ArrowUp, X, Radio, ArrowUpDown, Sparkles } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Search, Filter, ArrowUp, X, Radio, ArrowUpDown, Sparkles, Database, Layers, ShieldCheck } from 'lucide-react';
 import { ChainEvent, EventType, EventSeverity, RarityBand } from '../types';
 import { EventCard } from './EventCard';
 import { EmptyState } from './EmptyState';
@@ -320,16 +321,126 @@ export const EventFeed: React.FC<EventFeedProps> = ({
 
       {/* Event List or Empty State */}
       {displayedEvents.length === 0 ? (
-        <EmptyState
-          title="No qualifying events found"
-          description={
-            hasActiveFilters
-              ? 'No observations match your current filter parameters.'
-              : 'No qualifying Bitcoin events observed yet. Waiting for incoming chain activity...'
-          }
-          actionText={hasActiveFilters ? 'Reset filters' : undefined}
-          onAction={hasActiveFilters ? handleResetFilters : undefined}
-        />
+        <div className="space-y-6">
+          <EmptyState
+            title="No qualifying events found"
+            description={
+              hasActiveFilters
+                ? 'No observations match your current filter parameters.'
+                : 'No qualifying Bitcoin events observed yet. Waiting for incoming chain activity...'
+            }
+            actionText={hasActiveFilters ? 'Reset filters' : undefined}
+            onAction={hasActiveFilters ? handleResetFilters : undefined}
+          />
+
+          {!hasActiveFilters && (
+            <div className="bg-surface-panel/40 border border-surface-border rounded-lg p-5">
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <Database className="w-4 h-4 text-amber-500" />
+                  <h3 className="text-sm font-mono font-bold text-white uppercase tracking-wider">
+                    Frozen Contract Acceptance Fixtures (Phase 7A)
+                  </h3>
+                </div>
+                <span className="text-xs font-mono text-slate-400">
+                  Pre-configured statistical scenarios
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 font-sans mb-4 leading-relaxed">
+                While local observer monitors live incoming blocks and mempool transactions, you can inspect each verified Phase 7A statistical contract state:
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <Link
+                  to="/events/fixture-exact"
+                  className="p-3.5 rounded-lg bg-surface-card hover:bg-surface-border/80 border border-surface-border transition-all group block"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-mono font-semibold text-emerald-300 group-hover:text-emerald-200">
+                      Exact Empirical Rarity
+                    </span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60">
+                      99.94% EXACT
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 font-mono">
+                    11 events ≥ value out of 18,421 comparable events. Full Impact Index (85.0/100).
+                  </p>
+                </Link>
+
+                <Link
+                  to="/events/fixture-estimated"
+                  className="p-3.5 rounded-lg bg-surface-card hover:bg-surface-border/80 border border-surface-border transition-all group block"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-mono font-semibold text-amber-300 group-hover:text-amber-200">
+                      Estimated Rarity
+                    </span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-300 border border-amber-800/60">
+                      ≈ 99.47% ESTIMATE
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 font-mono">
+                    Quantile interpolation estimate. Partial coverage impact score (42.5/100).
+                  </p>
+                </Link>
+
+                <Link
+                  to="/events/fixture-insufficient"
+                  className="p-3.5 rounded-lg bg-surface-card hover:bg-surface-border/80 border border-surface-border transition-all group block"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-mono font-semibold text-amber-400 group-hover:text-amber-300">
+                      Insufficient Baseline Data
+                    </span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
+                      N &lt; 100
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 font-mono">
+                    Sample size 37 &lt; 100 threshold. Null percentiles preserved. Never 0% or COMMON.
+                  </p>
+                </Link>
+
+                <Link
+                  to="/events/fixture-reorg"
+                  className="p-3.5 rounded-lg bg-surface-card hover:bg-surface-border/80 border border-surface-border transition-all group block"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-mono font-semibold text-sky-300 group-hover:text-sky-200 flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>Reorg Lifecycle</span>
+                    </span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-sky-950/60 text-sky-300 border border-sky-800/60">
+                      LIFECYCLE
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 font-mono">
+                    CONFIRMED → REORGED_OUT → MEMPOOL_SEEN chronology without attack implications.
+                  </p>
+                </Link>
+
+                <Link
+                  to="/events/fixture-witness"
+                  className="p-3.5 rounded-lg bg-surface-card hover:bg-surface-border/80 border border-surface-border transition-all group block sm:col-span-2 lg:col-span-2"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-mono font-semibold text-purple-300 group-hover:text-purple-200 flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Multi-Witness Provenance</span>
+                    </span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-950/60 text-purple-300 border border-purple-800/60">
+                      PROVENANCE
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 font-mono">
+                    Distinguishes primary witness (Core/ZMQ), corroborating witness (mempool.space), and historical reconstruction (Replay).
+                  </p>
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="space-y-3.5">
           {displayedEvents.map((event) => (
